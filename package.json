@@ -1,15 +1,13 @@
 {
   "name": "hydrobot-server",
-  "version": "3.0.0",
-  "description": "HydroBot NFT - Telegram Bot Server",
+  "version": "4.0.0",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "node-telegram-bot-api": "^0.64.0",
-    "sharp": "^0.33.0"
+    "node-telegram-bot-api": "^0.64.0"
   },
   "engines": {
     "node": ">=18.0.0"
