@@ -1,15 +1,15 @@
 {
   "name": "hydrobot-server",
-  "version": "1.0.0",
-  "description": "HydroBot NFT - Telegram Bot Server untuk monitoring hidroponik",
+  "version": "2.0.0",
+  "description": "HydroBot NFT - Telegram Bot Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "canvas": "^2.11.2",
     "express": "^4.18.2",
-    "node-telegram-bot-api": "^0.64.0"
+    "node-telegram-bot-api": "^0.64.0",
+    "puppeteer": "^21.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
