@@ -5,4 +5,4 @@ nixPkgs = ["nodejs_18", "pkg-config", "cairo", "pango", "libpng", "libjpeg", "gi
 cmds = ["npm install"]
 
 [start]
-cmd = "node server_backup.js"
+cmd = "node server.js"
