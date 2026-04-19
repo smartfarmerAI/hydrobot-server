@@ -1,8 +1,24 @@
 [phases.setup]
-nixPkgs = ["nodejs_18", "pkg-config", "cairo", "pango", "libpng", "libjpeg", "giflib", "librsvg"]
+nixPkgs = [
+  "nodejs_18",
+  "pkg-config",
+  "cairo",
+  "pango",
+  "libpng",
+  "libjpeg",
+  "giflib",
+  "librsvg",
+  "fontconfig",
+  "freetype",
+  "dejavu_fonts",
+  "liberation_ttf"
+]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = [
+  "npm install",
+  "fc-cache -fv"
+]
 
 [start]
 cmd = "node server.js"
