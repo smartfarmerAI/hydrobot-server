@@ -4,7 +4,7 @@
   "description": "HydroBot NFT - Telegram Bot Server untuk monitoring hidroponik",
   "main": "server.js",
   "scripts": {
-    "start": "node server_backup.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "canvas": "^2.11.2",
