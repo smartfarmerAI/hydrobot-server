@@ -1,24 +1,39 @@
 [phases.setup]
 nixPkgs = [
   "nodejs_18",
-  "pkg-config",
-  "cairo",
+  "chromium",
+  "nss",
+  "nspr",
+  "atk",
+  "cups",
+  "dbus",
+  "expat",
+  "libdrm",
+  "libxkbcommon",
+  "mesa",
+  "xorg.libX11",
+  "xorg.libXcomposite",
+  "xorg.libXdamage",
+  "xorg.libXext",
+  "xorg.libXfixes",
+  "xorg.libXrandr",
+  "xorg.libxcb",
+  "xorg.libXcursor",
+  "xorg.libXi",
+  "xorg.libXtst",
   "pango",
-  "libpng",
-  "libjpeg",
-  "giflib",
-  "librsvg",
-  "fontconfig",
-  "freetype",
-  "dejavu_fonts",
-  "liberation_ttf"
+  "cairo",
+  "glib",
+  "gtk3",
+  "alsa-lib"
 ]
 
 [phases.install]
-cmds = [
-  "npm install",
-  "fc-cache -fv"
-]
+cmds = ["npm install"]
+
+[variables]
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
+PUPPETEER_EXECUTABLE_PATH = "/run/current-system/sw/bin/chromium"
 
 [start]
 cmd = "node server.js"
