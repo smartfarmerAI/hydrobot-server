@@ -1,6 +1,6 @@
 const express = require('express');
 const TelegramBot = require('node-telegram-bot-api');
-const puppeteer = require('puppeteer');
+const sharp = require('sharp');
 
 const app = express();
 app.use(express.json());
@@ -31,137 +31,160 @@ let phHistory = [6.1, 6.2, 6.3, 6.4, 6.5, 6.2];
 let jamHistory = ['10', '11', '12', '13', '14', '15'];
 
 // =============================================
-//   GENERATE HTML CARD
+//   GENERATE SVG
 // =============================================
-function buildHTML(data) {
+function buildSVG(data) {
+  const W = 520;
   const phMax = 7.5, phMin = 5.0;
-
-  const bars = phHistory.map((ph, i) => {
-    const pct = Math.max(5, ((ph - phMin) / (phMax - phMin)) * 100);
-    const color = ph > 6.5 ? '#f87171' : ph > 6.0 ? '#fbbf24' : '#4ade80';
-    return `
-      <div style="display:flex;flex-direction:column;align-items:center;flex:1;gap:4px">
-        <span style="font-size:10px;color:#c8d8e4">${ph.toFixed(1)}</span>
-        <div style="width:100%;background:rgba(255,255,255,0.05);border-radius:4px;height:50px;display:flex;align-items:flex-end">
-          <div style="width:100%;height:${pct}%;background:${color};border-radius:4px;opacity:0.8"></div>
-        </div>
-        <span style="font-size:9px;color:#6b8f6b">${jamHistory[i]}</span>
-      </div>`;
-  }).join('');
-
   const phOk = data.ph >= 5.5 && data.ph <= 6.5;
   const tdsOk = data.tds >= 700 && data.tds <= 1200;
 
-  const cards = [
-    { label: 'pH', value: data.ph.toFixed(1), sub: phOk ? 'NORMAL' : 'PERIKSA!', color: phOk ? '#4ade80' : '#fbbf24', border: phOk ? 'rgba(74,222,128,0.2)' : 'rgba(251,191,36,0.3)' },
-    { label: 'TDS (ppm)', value: data.tds, sub: tdsOk ? 'NORMAL' : 'PERIKSA!', color: tdsOk ? '#4ade80' : '#fbbf24', border: tdsOk ? 'rgba(74,222,128,0.2)' : 'rgba(251,191,36,0.3)' },
-    { label: 'Level Air', value: data.level_air + '%', sub: 'RESERVOIR', color: '#60a5fa', border: 'rgba(96,165,250,0.2)' },
-    { label: 'Suhu Udara', value: data.suhu_udara + '°C', sub: 'NORMAL', color: '#4ade80', border: 'rgba(74,222,128,0.2)' },
-    { label: 'Suhu Air', value: data.suhu_air + '°C', sub: 'NORMAL', color: '#4ade80', border: 'rgba(74,222,128,0.2)' },
-    { label: 'Kelembaban', value: data.kelembaban + '%', sub: 'NORMAL', color: '#4ade80', border: 'rgba(74,222,128,0.2)' },
-  ].map(c => `
-    <div style="background:rgba(255,255,255,0.03);border:1px solid ${c.border};border-radius:10px;padding:12px;flex:1">
-      <div style="font-size:10px;color:#6b8f6b;margin-bottom:6px">${c.label}</div>
-      <div style="font-size:24px;font-weight:700;color:${c.color};margin-bottom:4px">${c.value}</div>
-      <div style="font-size:9px;color:${c.color};opacity:0.6">${c.sub}</div>
-    </div>`).join('');
+  // Sensor cards
+  const sensors = [
+    { label: 'pH', value: data.ph.toFixed(1), sub: phOk ? 'NORMAL' : 'PERIKSA!', color: phOk ? '#4ade80' : '#fbbf24' },
+    { label: 'TDS ppm', value: String(data.tds), sub: tdsOk ? 'NORMAL' : 'PERIKSA!', color: tdsOk ? '#4ade80' : '#fbbf24' },
+    { label: 'Level Air', value: data.level_air + '%', sub: 'RESERVOIR', color: '#60a5fa' },
+    { label: 'Suhu Udara', value: data.suhu_udara + 'C', sub: 'NORMAL', color: '#4ade80' },
+    { label: 'Suhu Air', value: data.suhu_air + 'C', sub: 'NORMAL', color: '#4ade80' },
+    { label: 'Kelembaban', value: data.kelembaban + '%', sub: 'NORMAL', color: '#4ade80' },
+  ];
 
+  const cardW = 148, cardH = 80, cardGapX = 16, cardGapY = 10;
+  const cardStartX = 20, cardStartY = 88;
+
+  let sensorCards = '';
+  sensors.forEach((s, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const x = cardStartX + col * (cardW + cardGapX);
+    const y = cardStartY + row * (cardH + cardGapY);
+    const isWarn = s.color === '#fbbf24';
+    const borderColor = isWarn ? 'rgba(251,191,36,0.3)' : s.color === '#60a5fa' ? 'rgba(96,165,250,0.2)' : 'rgba(74,222,128,0.15)';
+    const bgColor = isWarn ? 'rgba(251,191,36,0.06)' : s.color === '#60a5fa' ? 'rgba(96,165,250,0.05)' : 'rgba(74,222,128,0.04)';
+
+    sensorCards += `
+      <rect x="${x}" y="${y}" width="${cardW}" height="${cardH}" rx="10" fill="${bgColor}" stroke="${borderColor}" stroke-width="1"/>
+      <text x="${x + 12}" y="${y + 18}" font-family="Arial, sans-serif" font-size="10" fill="#6b8f6b">${s.label}</text>
+      <text x="${x + 12}" y="${y + 52}" font-family="Arial, sans-serif" font-size="26" font-weight="bold" fill="${s.color}">${s.value}</text>
+      <text x="${x + 12}" y="${y + 68}" font-family="Arial, sans-serif" font-size="9" fill="${s.color}" opacity="0.6">${s.sub}</text>
+      ${isWarn ? `<text x="${x + cardW - 16}" y="${y + 18}" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#fbbf24">!</text>` : ''}
+    `;
+  });
+
+  // Bar chart
+  const chartY = 298;
+  const barAreaY = chartY + 20;
+  const barAreaH = 50;
+  const barW = 50, barGap = 30;
+
+  let bars = '';
+  phHistory.forEach((ph, i) => {
+    const x = 20 + i * (barW + barGap);
+    const ratio = Math.max(0.05, Math.min(1, (ph - phMin) / (phMax - phMin)));
+    const barH = ratio * barAreaH;
+    const y = barAreaY + (barAreaH - barH);
+    const color = ph > 6.5 ? '#f87171' : ph > 6.0 ? '#fbbf24' : '#4ade80';
+
+    bars += `
+      <rect x="${x}" y="${y}" width="${barW}" height="${barH}" rx="3" fill="${color}" opacity="0.75"/>
+      <text x="${x + barW / 2}" y="${y - 4}" font-family="Arial, sans-serif" font-size="10" fill="#c8d8e4" text-anchor="middle">${ph.toFixed(1)}</text>
+      <text x="${x + barW / 2}" y="${barAreaY + barAreaH + 14}" font-family="Arial, sans-serif" font-size="9" fill="#6b8f6b" text-anchor="middle">${jamHistory[i]}:00</text>
+    `;
+  });
+
+  // Actuators
+  const actY = 416;
   const actuators = [
     { label: 'Main Pump', state: data.pump },
     { label: 'Grow Light', state: data.light },
     { label: 'Dosing', state: data.dosing },
     { label: 'pH Down', state: false },
-  ].map(a => `
-    <div style="background:${a.state ? 'rgba(74,222,128,0.07)' : 'rgba(255,255,255,0.02)'};border:1px solid ${a.state ? 'rgba(74,222,128,0.25)' : 'rgba(255,255,255,0.06)'};border-radius:8px;padding:10px;flex:1;text-align:center">
-      <div style="font-size:10px;color:#6b8f6b;margin-bottom:6px">${a.label}</div>
-      <div style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${a.state ? '#4ade80' : 'rgba(255,255,255,0.15)'};margin-right:4px"></div>
-      <span style="font-size:11px;font-weight:700;color:${a.state ? '#4ade80' : 'rgba(255,255,255,0.2)'}">${a.state ? 'ON' : 'OFF'}</span>
-    </div>`).join('');
+  ];
+  const actW = 108, actH = 56, actGap = 10;
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    width: 520px;
-    background: transparent;
-    font-family: 'DejaVu Sans', Arial, sans-serif;
-  }
-  .card {
-    background: linear-gradient(160deg, #071a0a 0%, #0a1f10 50%, #061510 100%);
-    border: 1.5px solid rgba(74,222,128,0.25);
-    border-radius: 20px;
-    padding: 20px;
-    width: 520px;
-  }
-</style>
-</head>
-<body>
-<div class="card">
+  let actCards = '';
+  actuators.forEach((a, i) => {
+    const x = 20 + i * (actW + actGap);
+    const y = actY + 14;
+    const border = a.state ? 'rgba(74,222,128,0.25)' : 'rgba(255,255,255,0.06)';
+    const bg = a.state ? 'rgba(74,222,128,0.07)' : 'rgba(255,255,255,0.02)';
+    const dotColor = a.state ? '#4ade80' : 'rgba(255,255,255,0.15)';
+    const textColor = a.state ? '#4ade80' : 'rgba(255,255,255,0.2)';
+
+    actCards += `
+      <rect x="${x}" y="${y}" width="${actW}" height="${actH}" rx="8" fill="${bg}" stroke="${border}" stroke-width="1"/>
+      <text x="${x + 10}" y="${y + 20}" font-family="Arial, sans-serif" font-size="10" fill="#6b8f6b">${a.label}</text>
+      <circle cx="${x + 16}" cy="${y + 38}" r="5" fill="${dotColor}"/>
+      <text x="${x + 28}" y="${y + 43}" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="${textColor}">${a.state ? 'ON' : 'OFF'}</text>
+    `;
+  });
+
+  const totalH = 570;
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${totalH}">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#071a0a"/>
+      <stop offset="50%" style="stop-color:#0a1f10"/>
+      <stop offset="100%" style="stop-color:#061510"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="80%" cy="15%" r="40%">
+      <stop offset="0%" style="stop-color:#4ade80;stop-opacity:0.07"/>
+      <stop offset="100%" style="stop-color:#4ade80;stop-opacity:0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="${W}" height="${totalH}" rx="20" fill="url(#bg)"/>
+  <rect width="${W}" height="${totalH}" rx="20" fill="url(#glow)"/>
+  <rect x="1" y="1" width="${W - 2}" height="${totalH - 2}" rx="19" fill="none" stroke="rgba(74,222,128,0.25)" stroke-width="1.5"/>
 
   <!-- Header -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
-    <div>
-      <div style="font-size:20px;font-weight:700;color:#4ade80;letter-spacing:1px">HYDROBOT NFT</div>
-      <div style="font-size:10px;color:#6b8f6b;margin-top:3px;letter-spacing:2px">REAL-TIME MONITORING SYSTEM</div>
-    </div>
-    <div style="background:rgba(74,222,128,0.1);border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:4px 12px;display:flex;align-items:center;gap:6px">
-      <div style="width:7px;height:7px;border-radius:50%;background:#4ade80"></div>
-      <span style="font-size:11px;font-weight:700;color:#4ade80">LIVE</span>
-    </div>
-  </div>
+  <text x="20" y="42" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#4ade80" letter-spacing="1">HYDROBOT NFT</text>
+  <text x="22" y="62" font-family="Arial, sans-serif" font-size="10" fill="#6b8f6b" letter-spacing="2">REAL-TIME MONITORING SYSTEM</text>
 
-  <!-- Divider -->
-  <div style="height:1px;background:rgba(74,222,128,0.12);margin-bottom:14px"></div>
+  <!-- LIVE Badge -->
+  <rect x="${W - 88}" y="26" width="66" height="24" rx="12" fill="rgba(74,222,128,0.1)" stroke="rgba(74,222,128,0.3)" stroke-width="1"/>
+  <circle cx="${W - 76}" cy="38" r="4" fill="#4ade80"/>
+  <text x="${W - 68}" y="43" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#4ade80">LIVE</text>
 
-  <!-- Sensor Grid row 1 -->
-  <div style="display:flex;gap:10px;margin-bottom:10px">${cards.slice(0,3).join('')}</div>
-  <!-- Sensor Grid row 2 -->
-  <div style="display:flex;gap:10px;margin-bottom:14px">${cards.slice(3,6).join('')}</div>
+  <!-- Divider 1 -->
+  <line x1="20" y1="76" x2="${W - 20}" y2="76" stroke="rgba(74,222,128,0.15)" stroke-width="1"/>
 
-  <!-- Divider -->
-  <div style="height:1px;background:rgba(74,222,128,0.08);margin-bottom:10px"></div>
+  <!-- Sensor Cards -->
+  ${sensorCards}
 
-  <!-- Chart -->
-  <div style="font-size:10px;font-weight:700;color:#6b8f6b;letter-spacing:1px;margin-bottom:8px">TREN pH -- 6 JAM TERAKHIR</div>
-  <div style="display:flex;gap:8px;height:70px;align-items:flex-end;margin-bottom:14px">${bars}</div>
+  <!-- Divider 2 -->
+  <line x1="20" y1="${chartY - 8}" x2="${W - 20}" y2="${chartY - 8}" stroke="rgba(74,222,128,0.1)" stroke-width="1"/>
 
-  <!-- Divider -->
-  <div style="height:1px;background:rgba(74,222,128,0.08);margin-bottom:10px"></div>
+  <!-- Chart Title -->
+  <text x="20" y="${chartY + 10}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#6b8f6b" letter-spacing="1">TREN pH -- 6 JAM TERAKHIR</text>
 
-  <!-- Aktuator -->
-  <div style="font-size:10px;font-weight:700;color:#6b8f6b;letter-spacing:1px;margin-bottom:8px">STATUS AKTUATOR</div>
-  <div style="display:flex;gap:8px;margin-bottom:14px">${actuators}</div>
+  <!-- Bars -->
+  ${bars}
+
+  <!-- Divider 3 -->
+  <line x1="20" y1="${actY - 8}" x2="${W - 20}" y2="${actY - 8}" stroke="rgba(74,222,128,0.1)" stroke-width="1"/>
+
+  <!-- Actuator Title -->
+  <text x="20" y="${actY + 8}" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="#6b8f6b" letter-spacing="1">STATUS AKTUATOR</text>
+
+  <!-- Actuator Cards -->
+  ${actCards}
 
   <!-- Footer -->
-  <div style="height:1px;background:rgba(74,222,128,0.08);margin-bottom:10px"></div>
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:10px;color:#6b8f6b">Update: ${data.timestamp}</span>
-    <span style="font-size:10px;font-weight:700;color:rgba(74,222,128,0.4);letter-spacing:1px">SMARTFARMER AI</span>
-  </div>
-
-</div>
-</body>
-</html>`;
+  <line x1="20" y1="516" x2="${W - 20}" y2="516" stroke="rgba(74,222,128,0.1)" stroke-width="1"/>
+  <text x="20" y="536" font-family="Arial, sans-serif" font-size="10" fill="#6b8f6b">Update: ${data.timestamp}</text>
+  <text x="${W - 136}" y="536" font-family="Arial, sans-serif" font-size="10" font-weight="bold" fill="rgba(74,222,128,0.4)" letter-spacing="1">SMARTFARMER AI</text>
+</svg>`;
 }
 
 // =============================================
-//   SCREENSHOT HTML -> PNG
+//   GENERATE IMAGE dari SVG
 // =============================================
 async function generateImage(data) {
-  const browser = await puppeteer.launch({
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-    headless: 'new'
-  });
-  const page = await browser.newPage();
-  await page.setViewport({ width: 520, height: 100 });
-  await page.setContent(buildHTML(data), { waitUntil: 'networkidle0' });
-
-  const element = await page.$('.card');
-  const imgBuffer = await element.screenshot({ type: 'png' });
-  await browser.close();
+  const svg = buildSVG(data);
+  const imgBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
   return imgBuffer;
 }
 
